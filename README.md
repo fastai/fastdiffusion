@@ -14,9 +14,8 @@
 - [What are Diffusion Models? · Lilian Weng](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)
 - [Generative Modeling by Estimating Gradients of the Data Distribution](https://yang-song.net/blog/2021/score/) (Yang Song)
 - [The Annotated Diffusion Model](https://huggingface.co/blog/annotated-diffusion)
-- []()
-
 - [Understanding VQ-VAE (DALL-E Explained Pt. 1)](https://ml.berkeley.edu/blog/posts/vq-vae/)
+- []()
 
 ## Improvements on simple diffusion
 
