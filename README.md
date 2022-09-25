@@ -72,6 +72,21 @@ Some of these tricks could be effective / didactic.
 - Deblur
 - CycleGAN / Pixel2Pixel -> change subject/location/weather/etc
 
+### Diffusion Applications and Demos
+
+- Stable Diffusion fine-tuning (for specific styles or domains).
+
+  * [Pokemon fine-tuning](https://github.com/justinpinkney/stable-diffusion#fine-tuning).
+  
+  * Japanese Stable Diffusion [code](https://github.com/rinnakk/japanese-stable-diffusion#why-japanese-stable-diffusion) [demo](https://huggingface.co/spaces/rinna/japanese-stable-diffusion). They had to fine-tune the text embeddings too because the tokenizer was different.
+
+- Stable Diffusion morphing / videos. [Code](https://github.com/nateraw/stable-diffusion-videos) by @nateraw based on [a gist by @karpathy](https://gist.github.com/karpathy/00103b0037c5aaea32fe1da1af553355).
+
+- Image Variations. [Demo, with links to code](https://huggingface.co/spaces/lambdalabs/stable-diffusion-image-variations). Use the CLIP _image_ embeddings as conditioning for the generation, instead of the text embeddings. This requires fine-tuning of the model because, as far as I understand it, the text and image embeddings are not aligned in the embedding space. CLOOB doesn't have this limitation, but I heard (source: Boris Dayma from a conversation with Katherine Crowson) that attempting to train a diffusion model with CLOOB conditioning instead of CLIP produced less variety of results.
+
+- Image to image generation. [Demo sketch -> image](https://huggingface.co/spaces/huggingface/diffuse-the-rest).
+  
+
 ## Other model ideas
 
 - Latent space models
