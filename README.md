@@ -6,6 +6,7 @@
 ## Useful resources
 
 - [Stable Diffusion with 🧨 Diffusers](https://huggingface.co/blog/stable_diffusion)
+- [Huggingface noteboooks](https://github.com/huggingface/notebooks/tree/main/diffusers)
 - [Simple diffusion from Johno](https://colab.research.google.com/drive/12xmTDBYssfFVMUs0XhGXWP42SN6mijtt?usp=sharing)
 - [Introduction to Diffusion Models for Machine Learning](https://www.assemblyai.com/blog/diffusion-models-for-machine-learning-introduction/) - AssemblyAI
 - [Tutorial - What is a variational autoencoder?](https://jaan.io/what-is-variational-autoencoder-vae-tutorial/)
