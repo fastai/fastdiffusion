@@ -16,7 +16,34 @@
 - [Generative Modeling by Estimating Gradients of the Data Distribution](https://yang-song.net/blog/2021/score/) (Yang Song)
 - [The Annotated Diffusion Model](https://huggingface.co/blog/annotated-diffusion)
 - [Understanding VQ-VAE (DALL-E Explained Pt. 1)](https://ml.berkeley.edu/blog/posts/vq-vae/)
+- [Diffusers Interpret](https://github.com/JoaoLages/diffusers-interpret). Model explainability, could be adapted to show some nice instructive plots. 
 - []()
+
+### Additional papers
+
+- [Diffusion Models Beat GANs on Image Synthesis](https://arxiv.org/abs/2105.05233), Dhariwal & Nichol 2021.
+
+  Proposes architecture improvements (as of the state of the art in 2021, i.e. DDPM and DDIM) that could give some insight when we write models from scratch. In addition, introduces _classifier guidance_ to improve conditional image synthesis. This was later replaced by classifier-free guidance, but using a classifier looks like the natural thing to do for conditional generation.
+
+- [Fast Sampling of Diffusion Models with Exponential Integrator](https://arxiv.org/abs/2204.13902).
+
+  DEIS Scheduler. Authors claim excellent sampling results with as few as 12 steps. I haven't read it yet.
+
+#### Application-oriented papers
+
+Some of these tricks could be effective / didactic.
+
+- [An Image is Worth One Word: Personalizing Text-to-Image Generation using Textual Inversion](https://arxiv.org/abs/2208.01618).
+
+  "Text Inversion": create new text embeddings from a few sample images. This effectively introduces new terms in the vocabulary that can be used in phrases for text to image generation.
+
+- [DreamBooth: Fine Tuning Text-to-Image Diffusion Models for Subject-Driven Generation](https://arxiv.org/abs/2208.12242).
+
+  Similar goal as the text inversion paper, but different approach I think (I haven't read it yet).
+
+- [Prompt-to-Prompt Image Editing with Cross Attention Control](https://arxiv.org/abs/2208.01626), Hertz et al. 2022.
+
+  Manipulate the cross-attention layers to produce changes in the text-to-image generation by replacing words, introducing new terms or weighting the importance of existing terms.
 
 ## Improvements on simple diffusion
 
