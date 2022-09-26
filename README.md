@@ -17,6 +17,8 @@
 - [The Annotated Diffusion Model](https://huggingface.co/blog/annotated-diffusion)
 - [Understanding VQ-VAE (DALL-E Explained Pt. 1)](https://ml.berkeley.edu/blog/posts/vq-vae/)
 - [Diffusers Interpret](https://github.com/JoaoLages/diffusers-interpret). Model explainability, could be adapted to show some nice instructive plots. 
+- [Denoising Diffusion Probabilistic Model in Flax](https://github.com/yiyixuxu/denoising-diffusion-flax) by YiYi Xu, includes P2 weighting, self-conditioning, and EMA
+- []()
 - []()
 
 ### Additional papers
@@ -50,6 +52,9 @@ Some of these tricks could be effective / didactic.
 - Better denoising autoencoder (diffusion model)
   - Unet
   - Attention
+  - P2 weighting
+  - EMA
+  - Self-conditioning
 - Predict noise / gradient (Score based diffusion)
 - Latent diffusion (can not be a unet)
   - Attention
