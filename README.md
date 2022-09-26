@@ -52,6 +52,9 @@ Some of these tricks could be effective / didactic.
 - Better denoising autoencoder (diffusion model)
   - Unet
   - Attention
+  - P2 weighting
+  - EMA
+  - Self-conditioning
 - Predict noise / gradient (Score based diffusion)
 - Latent diffusion (can not be a unet)
   - Attention
