@@ -47,6 +47,10 @@ Some of these tricks could be effective / didactic.
 
   Manipulate the cross-attention layers to produce changes in the text-to-image generation by replacing words, introducing new terms or weighting the importance of existing terms.
 
+- [VToonify: Controllable High-Resolution Portrait Video Style Transfer](https://arxiv.org/abs/2209.11224)
+  
+  High-quality and temporally-coherent artistic portrait videos with flexible style controls.
+
 ## Improvements on simple diffusion
 
 - Better denoising autoencoder (diffusion model)
