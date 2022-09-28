@@ -70,6 +70,7 @@ Some of these tricks could be effective / didactic.
 - Better samplers / optimisers
 - Initialisers such as pixelshuffle
 - Learnable blur
+- Blur noise
 
 ## Applications
 
