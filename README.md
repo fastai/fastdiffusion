@@ -1,6 +1,7 @@
 # fastdiffusion
 
 - Big resource list: [What's the score? Review of latest Score Based Generative Modeling papers.](https://scorebasedgenerativemodeling.github.io/)
+- List of diffusion papers: [Diffusion Reading Group](https://github.com/tmabraham/diffusion_reading_group#list-of-papers-to-cover)
 - [labml.ai Annotated PyTorch Paper Implementations](https://nn.labml.ai/)
 
 ## Useful resources
