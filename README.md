@@ -97,6 +97,15 @@ Some of these tricks could be effective / didactic.
 
 - Image to image generation. [Demo sketch -> image](https://huggingface.co/spaces/huggingface/diffuse-the-rest).
   
+## Style Transfer
+- Vincent's work: https://github.com/VinceMarron/style_transfer/blob/master/vgg_styletrans.py
+- Johno's implementation of that plus some different style loss variants: https://colab.research.google.com/drive/1nTcswqeDmiW67WjEaQ8lAZP9v_5gKjCB?usp=sharing
+- Insporation for the Sliced OT version: https://www.youtube.com/watch?v=ZFYZFlY7lgI&t=10s (Aside: NCA are super cool, I want to research them more as soon as the course craziness subsides)
+- ImStack (which I like over just optimizing raw pixels): https://johnowhitaker.github.io/imstack/
+- Q: fast style transfer (where a network does one-shot stylization) what networks and tricks seem to work best?
+- Q: Do augmentations help with Getys style style transfer? TODO Johno test
+- Q: What layers give good results? Would a different network to VGG16 be better?
+
 
 ## Other model ideas
 
