@@ -1,6 +1,7 @@
 # fastdiffusion
 
 - Big resource list: [What's the score? Review of latest Score Based Generative Modeling papers.](https://scorebasedgenerativemodeling.github.io/)
+- List of diffusion papers: [Diffusion Reading Group](https://github.com/tmabraham/diffusion_reading_group#list-of-papers-to-cover)
 - [labml.ai Annotated PyTorch Paper Implementations](https://nn.labml.ai/)
 
 ## Useful resources
@@ -18,6 +19,7 @@
 - [Understanding VQ-VAE (DALL-E Explained Pt. 1)](https://ml.berkeley.edu/blog/posts/vq-vae/)
 - [Diffusers Interpret](https://github.com/JoaoLages/diffusers-interpret). Model explainability, could be adapted to show some nice instructive plots. 
 - [Denoising Diffusion Probabilistic Model in Flax](https://github.com/yiyixuxu/denoising-diffusion-flax) by YiYi Xu, includes P2 weighting, self-conditioning, and EMA
+- [A Traveler’s Guide to the Latent Space](https://sweet-hall-e72.notion.site/A-Traveler-s-Guide-to-the-Latent-Space-85efba7e5e6a40e5bd3cae980f30235f)
 - []()
 - []()
 
@@ -70,6 +72,7 @@ Some of these tricks could be effective / didactic.
 - Better samplers / optimisers
 - Initialisers such as pixelshuffle
 - Learnable blur
+- Blur noise
 
 ## Applications
 
@@ -95,6 +98,15 @@ Some of these tricks could be effective / didactic.
 
 - Image to image generation. [Demo sketch -> image](https://huggingface.co/spaces/huggingface/diffuse-the-rest).
   
+## Style Transfer
+- Vincent's work: https://github.com/VinceMarron/style_transfer/blob/master/vgg_styletrans.py
+- Johno's implementation of that plus some different style loss variants: https://colab.research.google.com/drive/1nTcswqeDmiW67WjEaQ8lAZP9v_5gKjCB?usp=sharing
+- Insporation for the Sliced OT version: https://www.youtube.com/watch?v=ZFYZFlY7lgI&t=10s (Aside: NCA are super cool, I want to research them more as soon as the course craziness subsides)
+- ImStack (which I like over just optimizing raw pixels): https://johnowhitaker.github.io/imstack/
+- Q: fast style transfer (where a network does one-shot stylization) what networks and tricks seem to work best?
+- Q: Do augmentations help with Getys style style transfer? TODO Johno test
+- Q: What layers give good results? Would a different network to VGG16 be better?
+
 
 ## Other model ideas
 
