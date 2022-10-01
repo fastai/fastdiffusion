@@ -13,6 +13,7 @@ from fastai.callback.wandb import *
 from diffusers import UNet2DModel
 from PIL import Image as Image_PIL
 from fastcore.script import *
+from fastcore.basics import patch_to
 
 # Left out accelerate for now since I actually want to manually set a single GPU as the device for a given run
 # from accelerate.utils import write_basic_config
@@ -108,12 +109,12 @@ class LogSamplesBasicCallback(Callback):
             mix_factor = 1/(n_steps - i)
             x = x*(1-mix_factor) + pred*mix_factor
 
-        im = torchvision.utils.make_grid(x.detach().cpu(), nrow=n_samples_row).permute(1, 2, 0).clip(0, 1) * 255
+        im = torchvision.utils.make_grid(x.detach().cpu(), nrow=self.n_samples_row).permute(1, 2, 0).clip(0, 1) * 255
         im = Image_PIL.fromarray(np.array(im).astype(np.uint8))
         wandb.log({'Sample generations basic':wandb.Image(im)})
 
     def after_epoch(self):
-        if log_samples_after_epoch:
+        if self.log_samples_after_epoch:
             self.log_samples()
 
 
@@ -125,21 +126,22 @@ class LogSamplesBasicCallback(Callback):
 class FIDCallback(Callback):
     
     def __init__(self, n_sampling_steps=40, n_samples_for_FID=500, img_size=64,
-                fid_after_epoch=False, calc_fid_every_n_steps=1000):
+                fid_after_epoch=False, calc_fid_every_n_steps=1000, batch_size=64):
         super().__init__()
         self.n_sampling_steps = n_sampling_steps
         self.n_samples_for_FID = n_samples_for_FID
         self.img_size = img_size
         self.calc_fid_every_n_steps = calc_fid_every_n_steps
         self.fid_after_epoch = fid_after_epoch
+        self.batch_size = batch_size
 
     def log_fid(self):
         print('log FID')
         model = self.learn.model
         n_steps = self.n_sampling_steps
         os.system('rm -rf generated_samples;mkdir generated_samples')
-        for start in range(0, self.n_samples_for_FID, batch_size):
-            end = min(start+batch_size, self.n_samples_for_FID)
+        for start in range(0, self.n_samples_for_FID, self.batch_size):
+            end = min(start+self.batch_size, self.n_samples_for_FID)
             n = end-start
             if n > 0:
                 x = torch.rand(n, 3, self.img_size, self.img_size).to(model.net.device)
@@ -256,12 +258,27 @@ def main(dataset_name = 'cifar10', # Dataset name: faces, flowers or cifar10
 
     # Training!
     wandb.init(project='fastdiffusion', job_type=job_type, config=cfg)
+    
+    # I only want to commit logs to wandb every 50 iters otherwise things get too slow
+    @patch_to(WandbCallback)
+    def after_batch(self):
+        "Log hyper-parameters and training loss"
+        if self.training:
+            batch_time = time.perf_counter() - self.ti_batch
+            self._wandb_step += 1
+            self._wandb_epoch += 1/self.n_iter
+            hypers = {f'{k}_{i}':v for i,h in enumerate(self.opt.hypers) for k,v in h.items()}
+            if self.train_iter%50 == 0:
+                wandb.log({'epoch': self._wandb_epoch, 'train_loss': self.smooth_loss, 
+                           'raw_loss': self.loss, 'train_samples_per_sec': len(self.xb[0]) / batch_time,
+                           **hypers}, step=self._wandb_step)
+    
     # with learn.distrib_ctx():
     learn.fit_one_cycle(cfg['num_epochs'], lr_max=cfg['lr_max'], cbs=[
         WandbCallback(n_preds=8), 
         LogSamplesBasicCallback(n_sampling_steps=n_sampling_steps, n_samples_row=8, img_size=img_size,
                 log_samples_after_epoch=log_samples_after_epoch, log_samples_every_n_steps=log_samples_every_n_steps), 
         FIDCallback(n_sampling_steps=n_sampling_steps, calc_fid_every_n_steps=calc_fid_every_n_steps, img_size=img_size,
-                fid_after_epoch=fid_after_epoch, n_samples_for_FID=n_samples_for_FID)
+                fid_after_epoch=fid_after_epoch, n_samples_for_FID=n_samples_for_FID, batch_size = batch_size)
     ])
     wandb.finish()
