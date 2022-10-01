@@ -1,3 +1,5 @@
+# pip install --upgrade -q fastcore fastai diffusers datasets lpips pytorch-fid ema-pytorch wandb
+#python experiment_script_WIP.py --dataset_name faces --img_size 64 --num_epochs 50 --comments "cifar10 ema test" --job_type "EMA test" --calc_fid_every_n_steps 5000 --use_device cuda:0 --perceptual_loss_scale 0.1 --n_samples_for_FID 5000 --log_samples_every_n_steps 2000 --ema --ema_beta 0.998
 import wandb
 import torch
 import torchvision
@@ -14,6 +16,7 @@ from diffusers import UNet2DModel
 from PIL import Image as Image_PIL
 from fastcore.script import *
 from fastcore.basics import patch_to
+from ema_pytorch import EMA
 
 # Left out accelerate for now since I actually want to manually set a single GPU as the device for a given run
 # from accelerate.utils import write_basic_config
@@ -169,6 +172,64 @@ class FIDCallback(Callback):
     def after_step(self):
         if self.train_iter%self.calc_fid_every_n_steps == 0 and self.train_iter>0:
             self.log_fid()
+            
+# EMA
+class EMAFIDCallback(Callback):
+    def __init__(self, model, beta = 0.9999,              # exponential moving average factor
+                update_after_step = 100,    # only after this number of .update() calls will it start updating
+                update_every = 10,
+                n_sampling_steps=40, n_samples_for_FID=500, img_size=64,
+                fid_after_epoch=False, calc_fid_every_n_steps=1000, batch_size=64):
+        super().__init__()
+        self.n_sampling_steps = n_sampling_steps
+        self.n_samples_for_FID = n_samples_for_FID
+        self.img_size = img_size
+        self.calc_fid_every_n_steps = calc_fid_every_n_steps
+        self.fid_after_epoch = fid_after_epoch
+        self.batch_size = batch_size
+        self.ema = EMA(
+            model,
+            beta = beta,              # exponential moving average factor
+            update_after_step = update_after_step,    # only after this number of .update() calls will it start updating
+            update_every = update_every,          # how often to actually update, to save on compute (updates every 10th .update() call)
+        )
+        
+    def log_fid(self):
+        print('log FID')
+        model = self.ema # Instead of self.learn.model
+        n_steps = self.n_sampling_steps
+        os.system('rm -rf generated_samples_ema;mkdir generated_samples_ema')
+        for start in range(0, self.n_samples_for_FID, self.batch_size):
+            end = min(start+self.batch_size, self.n_samples_for_FID)
+            n = end-start
+            if n > 0:
+                x = torch.rand(n, 3, self.img_size, self.img_size).to(self.learn.model.net.device)
+                for i in range(n_steps):
+                    with torch.no_grad():
+                        pred = model(x)
+                    mix_factor = 1/(n_steps - i)
+                    x = x*(1-mix_factor) + pred*mix_factor
+            for i, im in enumerate(x):
+                im = im.detach().cpu().permute(1, 2, 0).clip(0, 1) * 255
+                im = Image_PIL.fromarray(np.array(im).astype(np.uint8))
+                im.save(f'generated_samples_ema/{start+i:06}.jpeg')
+
+        # Using a command-line version as a hack for now
+        os.system('python -m pytorch_fid generated_samples_ema/ valid_samples/ > log_ema.txt')
+        time.sleep(0.5) # Wait for the file operations to be propely finished - yuk!
+        with open('log_ema.txt', 'r') as logfile:
+            fid = float(logfile.read().split('  ')[-1])
+        wandb.log({'FID_EMA':fid})
+
+    def after_epoch(self):
+        if self.fid_after_epoch:
+            self.log_fid()
+
+    def after_step(self):
+        self.ema.update() # Updates the EMA model
+        if self.train_iter%self.calc_fid_every_n_steps == 0 and self.train_iter>0:
+            self.log_fid()
+        
         
 
 @call_parse
@@ -191,6 +252,8 @@ def main(dataset_name = 'cifar10', # Dataset name: faces, flowers or cifar10
          log_samples_after_epoch = False, # Log samples every epoch as well as every log_samples_every_n_steps
          fid_after_epoch = False, # Calc FID after every epoch as well as every calc_fid_every_n_steps
          use_device = 'cuda:0', # Which device should we use? Usually cuda:0
+         ema=False, # Use EMA?
+         ema_beta=0.999, # EMA factor
         ):
     device = torch.device(use_device if torch.cuda.is_available() else "cpu")
     print(f'Using device: {device}') 
@@ -274,11 +337,16 @@ def main(dataset_name = 'cifar10', # Dataset name: faces, flowers or cifar10
                            **hypers}, step=self._wandb_step)
     
     # with learn.distrib_ctx():
-    learn.fit_one_cycle(cfg['num_epochs'], lr_max=cfg['lr_max'], cbs=[
+    callbacks = [
         WandbCallback(n_preds=8), 
         LogSamplesBasicCallback(n_sampling_steps=n_sampling_steps, n_samples_row=8, img_size=img_size,
                 log_samples_after_epoch=log_samples_after_epoch, log_samples_every_n_steps=log_samples_every_n_steps), 
         FIDCallback(n_sampling_steps=n_sampling_steps, calc_fid_every_n_steps=calc_fid_every_n_steps, img_size=img_size,
-                fid_after_epoch=fid_after_epoch, n_samples_for_FID=n_samples_for_FID, batch_size = batch_size)
-    ])
+                fid_after_epoch=fid_after_epoch, n_samples_for_FID=n_samples_for_FID, batch_size = batch_size),
+        ]
+    if ema:
+        callbacks.append(EMAFIDCallback(learn.model, beta=ema_beta, n_sampling_steps=n_sampling_steps, 
+                                        calc_fid_every_n_steps=calc_fid_every_n_steps, img_size=img_size,
+                                        fid_after_epoch=fid_after_epoch, n_samples_for_FID=n_samples_for_FID, batch_size = batch_size))
+    learn.fit_one_cycle(cfg['num_epochs'], lr_max=cfg['lr_max'], cbs=callbacks)
     wandb.finish()
