@@ -20,24 +20,24 @@ from fastcore.script import *
 
 # THESE get overwritten by the parsing, left to remember initial defaults
 # BUT: do these get used for the classes defined outside of main?
-img_size = 32
-blur = True # Add blur as a crappifier option
-batch_size=64
-perceptual_loss_net = 'alex' # 'vgg'
-mse_loss_scale = 1
-perceptual_loss_scale = 0.1
-num_epochs = 10
-job_type = 'script test'
-comments = 'Script dev'
-lr_max = 1e-4
-n_sampling_steps = 40
-n_samples_row = 8
-log_samples_every_n_steps = 1000
-calc_fid_every_n_steps = 5000
-n_samples_for_FID = 500
-log_samples_after_epoch = False
-fid_after_epoch = False
-use_device = 'cuda:0'
+# img_size = 32
+# blur = True # Add blur as a crappifier option
+# batch_size=64
+# perceptual_loss_net = 'alex' # 'vgg'
+# mse_loss_scale = 1
+# perceptual_loss_scale = 0.1
+# num_epochs = 10
+# job_type = 'script test'
+# comments = 'Script dev'
+# lr_max = 1e-4
+# n_sampling_steps = 40
+# n_samples_row = 8
+# log_samples_every_n_steps = 1000
+# calc_fid_every_n_steps = 5000
+# n_samples_for_FID = 500
+# log_samples_after_epoch = False
+# fid_after_epoch = False
+# use_device = 'cuda:0'
 
 # Class for crappified image
 class PILImageNoised(PILImage): pass
@@ -48,9 +48,12 @@ PILImageNoised._tensor_cls = TensorImageNoised
 
 # Transform (TODO experiment)
 class Crappify(Transform):
+    def __init__(self, blur=True):
+        super().__init__()
+        self.blur = blur
     def encodes(self, x:TensorImageNoised): 
         x = IntToFloatTensor()(x)
-        if blur:
+        if self.blur:
             x = T.GaussianBlur(3)(x) # Add some random blur
         noise_amount = torch.rand(x.shape[0], device=x.device)
         noise = torch.rand_like(x, device=x.device)
@@ -84,11 +87,20 @@ class Unetwrapper(Module):
 
 # Callback for logging samples
 class LogSamplesBasicCallback(Callback):
+    def __init__(self, n_sampling_steps=40, n_samples_row=8, img_size=64,
+                log_samples_after_epoch=False, log_samples_every_n_steps=1000):
+        super().__init__()
+        self.n_sampling_steps = n_sampling_steps
+        self.n_samples_row = n_samples_row
+        self.img_size = img_size
+        self.log_samples_every_n_steps=log_samples_every_n_steps
+        self.log_samples_after_epoch = log_samples_after_epoch
+        
     def log_samples(self):
         print('log samples')
         model = self.learn.model
-        n_steps = n_sampling_steps
-        x = torch.rand(n_samples_row**2, 3, img_size, img_size).to(model.net.device)
+        n_steps = self.n_sampling_steps
+        x = torch.rand(self.n_samples_row**2, 3, self.img_size, self.img_size).to(model.net.device)
 
         for i in range(n_steps):
             with torch.no_grad():
@@ -106,22 +118,31 @@ class LogSamplesBasicCallback(Callback):
 
 
     def after_step(self):
-        if self.train_iter%log_samples_every_n_steps == 0 and self.train_iter>0:
+        if self.train_iter%self.log_samples_every_n_steps == 0 and self.train_iter>0:
             self.log_samples()
 
 # TODO use better system here so multiple experiments running at once don't ever clash by saving to the same folder!
 class FIDCallback(Callback):
+    
+    def __init__(self, n_sampling_steps=40, n_samples_for_FID=500, img_size=64,
+                fid_after_epoch=False, calc_fid_every_n_steps=1000):
+        super().__init__()
+        self.n_sampling_steps = n_sampling_steps
+        self.n_samples_for_FID = n_samples_for_FID
+        self.img_size = img_size
+        self.calc_fid_every_n_steps = calc_fid_every_n_steps
+        self.fid_after_epoch = fid_after_epoch
 
     def log_fid(self):
         print('log FID')
         model = self.learn.model
-        n_steps = n_sampling_steps
+        n_steps = self.n_sampling_steps
         os.system('rm -rf generated_samples;mkdir generated_samples')
-        for start in range(0, n_samples_for_FID, batch_size):
-            end = min(start+batch_size, n_samples_for_FID)
+        for start in range(0, self.n_samples_for_FID, batch_size):
+            end = min(start+batch_size, self.n_samples_for_FID)
             n = end-start
             if n > 0:
-                x = torch.rand(n, 3, img_size, img_size).to(model.net.device)
+                x = torch.rand(n, 3, self.img_size, self.img_size).to(model.net.device)
                 for i in range(n_steps):
                     with torch.no_grad():
                         pred = model(x)
@@ -140,11 +161,11 @@ class FIDCallback(Callback):
         wandb.log({'FID':fid})
 
     def after_epoch(self):
-        if fid_after_epoch:
+        if self.fid_after_epoch:
             self.log_fid()
 
     def after_step(self):
-        if self.train_iter%calc_fid_every_n_steps == 0 and self.train_iter>0:
+        if self.train_iter%self.calc_fid_every_n_steps == 0 and self.train_iter>0:
             self.log_fid()
         
 
@@ -236,5 +257,11 @@ def main(dataset_name = 'cifar10', # Dataset name: faces, flowers or cifar10
     # Training!
     wandb.init(project='fastdiffusion', job_type=job_type, config=cfg)
     # with learn.distrib_ctx():
-    learn.fit_one_cycle(cfg['num_epochs'], lr_max=cfg['lr_max'], cbs=[WandbCallback(n_preds=8), LogSamplesBasicCallback(), FIDCallback()])
+    learn.fit_one_cycle(cfg['num_epochs'], lr_max=cfg['lr_max'], cbs=[
+        WandbCallback(n_preds=8), 
+        LogSamplesBasicCallback(n_sampling_steps=n_sampling_steps, n_samples_row=8, img_size=img_size,
+                log_samples_after_epoch=log_samples_after_epoch, log_samples_every_n_steps=log_samples_every_n_steps), 
+        FIDCallback(n_sampling_steps=n_sampling_steps, calc_fid_every_n_steps=calc_fid_every_n_steps, img_size=img_size,
+                fid_after_epoch=fid_after_epoch, n_samples_for_FID=n_samples_for_FID)
+    ])
     wandb.finish()
