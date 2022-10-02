@@ -1,5 +1,5 @@
-# pip install --upgrade -q fastcore fastai diffusers datasets lpips pytorch-fid ema-pytorch wandb
-#python experiment_script_WIP.py --dataset_name faces --img_size 64 --num_epochs 50 --comments "cifar10 ema test" --job_type "EMA test" --calc_fid_every_n_steps 5000 --use_device cuda:0 --perceptual_loss_scale 0.1 --n_samples_for_FID 5000 --log_samples_every_n_steps 2000 --ema --ema_beta 0.998
+# pip install --upgrade -q fastcore fastai diffusers datasets lpips pytorch-fid ema-pytorch wandb clean-fid
+#python experiment_script_WIP.py --dataset_name faces --batch_size 256 --img_size 64 --num_epochs 50 --comments "faces ema test" --job_type "Quick Run (no blur)" --calc_fid_every_n_steps 1000 --use_device cuda:0 --perceptual_loss_scale 0.1 --n_samples_for_FID 5000 --log_samples_every_n_steps 1000 --ema --ema_beta 0.998
 import wandb
 import torch
 import torchvision
@@ -17,31 +17,7 @@ from PIL import Image as Image_PIL
 from fastcore.script import *
 from fastcore.basics import patch_to
 from ema_pytorch import EMA
-
-# Left out accelerate for now since I actually want to manually set a single GPU as the device for a given run
-# from accelerate.utils import write_basic_config
-# write_basic_config()
-
-# THESE get overwritten by the parsing, left to remember initial defaults
-# BUT: do these get used for the classes defined outside of main?
-# img_size = 32
-# blur = True # Add blur as a crappifier option
-# batch_size=64
-# perceptual_loss_net = 'alex' # 'vgg'
-# mse_loss_scale = 1
-# perceptual_loss_scale = 0.1
-# num_epochs = 10
-# job_type = 'script test'
-# comments = 'Script dev'
-# lr_max = 1e-4
-# n_sampling_steps = 40
-# n_samples_row = 8
-# log_samples_every_n_steps = 1000
-# calc_fid_every_n_steps = 5000
-# n_samples_for_FID = 500
-# log_samples_after_epoch = False
-# fid_after_epoch = False
-# use_device = 'cuda:0'
+from cleanfid import fid
 
 # Class for crappified image
 class PILImageNoised(PILImage): pass
@@ -158,11 +134,12 @@ class FIDCallback(Callback):
                 im = Image_PIL.fromarray(np.array(im).astype(np.uint8))
                 im.save(f'generated_samples/{start+i:06}.jpeg')
 
-        # Using a command-line version as a hack for now
-        os.system('python -m pytorch_fid generated_samples/ valid_samples/ > log.txt')
-        time.sleep(0.5) # Wait for the file operations to be propely finished - yuk!
-        with open('log.txt', 'r') as logfile:
-            fid = float(logfile.read().split('  ')[-1])
+#         # Using a command-line version as a hack for now
+#         os.system('python -m pytorch_fid generated_samples/ valid_samples/ > log.txt')
+#         time.sleep(0.5) # Wait for the file operations to be propely finished - yuk!
+#         with open('log.txt', 'r') as logfile:
+#             fid = float(logfile.read().split('  ')[-1])
+        fid = fid.compute_fid('generated_samples/', 'valid_samples/')
         wandb.log({'FID':fid})
 
     def after_epoch(self):
@@ -214,11 +191,12 @@ class EMAFIDCallback(Callback):
                 im = Image_PIL.fromarray(np.array(im).astype(np.uint8))
                 im.save(f'generated_samples_ema/{start+i:06}.jpeg')
 
-        # Using a command-line version as a hack for now
-        os.system('python -m pytorch_fid generated_samples_ema/ valid_samples/ > log_ema.txt')
-        time.sleep(0.5) # Wait for the file operations to be propely finished - yuk!
-        with open('log_ema.txt', 'r') as logfile:
-            fid = float(logfile.read().split('  ')[-1])
+#         # Using a command-line version as a hack for now
+#         os.system('python -m pytorch_fid generated_samples_ema/ valid_samples/ > log_ema.txt')
+#         time.sleep(0.5) # Wait for the file operations to be propely finished - yuk!
+#         with open('log_ema.txt', 'r') as logfile:
+#             fid = float(logfile.read().split('  ')[-1])
+        fid = fid.compute_fid('generated_samples_ema/', 'valid_samples/')
         wandb.log({'FID_EMA':fid})
 
     def after_epoch(self):
@@ -336,7 +314,7 @@ def main(dataset_name = 'cifar10', # Dataset name: faces, flowers or cifar10
                            'raw_loss': self.loss, 'train_samples_per_sec': len(self.xb[0]) / batch_time,
                            **hypers}, step=self._wandb_step)
     
-    # with learn.distrib_ctx():
+    # logging callbacks can probably be consolidated...
     callbacks = [
         WandbCallback(n_preds=8), 
         LogSamplesBasicCallback(n_sampling_steps=n_sampling_steps, n_samples_row=8, img_size=img_size,
