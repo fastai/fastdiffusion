@@ -20,6 +20,7 @@
 - [Diffusers Interpret](https://github.com/JoaoLages/diffusers-interpret). Model explainability, could be adapted to show some nice instructive plots. 
 - [Denoising Diffusion Probabilistic Model in Flax](https://github.com/yiyixuxu/denoising-diffusion-flax) by YiYi Xu, includes P2 weighting, self-conditioning, and EMA
 - [A Traveler’s Guide to the Latent Space](https://sweet-hall-e72.notion.site/A-Traveler-s-Guide-to-the-Latent-Space-85efba7e5e6a40e5bd3cae980f30235f)
+- [Denoising diffusion probabilistic models](https://github.com/acids-ircam/diffusion_models) - math+code tutorials in 4 notebooks
 - []()
 - []()
 
