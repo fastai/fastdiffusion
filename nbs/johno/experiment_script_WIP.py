@@ -42,11 +42,19 @@ class Crappify(Transform):
         return x
 
 # The UNET Model (wraps diffusers unet)
+
+# Defaults usually
+#  block_out_channels=(32, 64, 128, 128,),
+# down_block_types=("DownBlock2D","DownBlock2D","AttnDownBlock2D","AttnDownBlock2D",),
+# up_block_types=("AttnUpBlock2D","AttnUpBlock2D","UpBlock2D","UpBlock2D",)
+            
+            
 class Unetwrapper(Module):
     def __init__(self, in_channels=3, out_channels=3, sample_size=64,
-                block_out_channels=(32, 64, 128, 128,),
-                down_block_types=("DownBlock2D","DownBlock2D","AttnDownBlock2D","AttnDownBlock2D",),
-                up_block_types=("AttnUpBlock2D","AttnUpBlock2D","UpBlock2D","UpBlock2D",)):
+                block_out_channels=(128, 256, 512),
+                down_block_types=("DownBlock2D","DownBlock2D","AttnDownBlock2D",),
+                up_block_types=("AttnUpBlock2D","UpBlock2D","UpBlock2D",)
+                ):
         super().__init__()
         self.net = UNet2DModel(
             sample_size=sample_size,  # the target image resolution
@@ -218,19 +226,6 @@ def main(dataset_name = 'cifar10', # Dataset name: faces, flowers or cifar10
          ema=False, # Use EMA?
          ema_beta=0.999, # EMA factor
         ):
-    
-    # Not sure how to do lists as args, setting manually for now
-    
-    # Defaults for a lot of weekend runs:
-#     block_out_channels=[32, 64, 128, 128], # UNET block channels
-#     down_block_types=["DownBlock2D","DownBlock2D","AttnDownBlock2D","AttnDownBlock2D"], # UNET downblock types
-#     up_block_types=["AttnUpBlock2D","AttnUpBlock2D","UpBlock2D","UpBlock2D"], # UNET upblock types
-    # New test
-    block_out_channels=[128, 256, 512], # UNET block channels
-    down_block_types=["DownBlock2D","DownBlock2D","AttnDownBlock2D"], # UNET downblock types
-    up_block_types=["AttnUpBlock2D","UpBlock2D","UpBlock2D"], # UNET upblock types
-            
-            
     device = torch.device(use_device if torch.cuda.is_available() else "cpu")
     print(f'Using device: {device}') 
 
@@ -276,10 +271,7 @@ def main(dataset_name = 'cifar10', # Dataset name: faces, flowers or cifar10
     dls.show_batch()
 
     # Model
-    model = Unetwrapper(sample_size=img_size, 
-                        block_out_channels=block_out_channels,
-                        down_block_types=down_block_types, 
-                        up_block_types=up_block_types).to(device)
+    model = Unetwrapper(sample_size=img_size).to(device)
 
     # Loss function
     loss_fn_perceptual = lpips.LPIPS(net=perceptual_loss_net).to(device)
