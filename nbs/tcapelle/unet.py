@@ -334,7 +334,8 @@ class Unet(nn.Module):
         self.final_res_block = block_klass(dim * 2, dim, time_emb_dim = time_dim)
         self.final_conv = nn.Conv2d(dim, self.out_dim, 1)
     
-    def forward_blocks(self, x, t, r):
+    def forward_blocks(self, x, t):
+        r = x.clone()
         h = []
 
         for block1, block2, attn, downsample in self.downs:
@@ -372,9 +373,9 @@ class Unet(nn.Module):
             x = torch.cat((x_self_cond, x), dim = 1)
 
         x = self.init_conv(x)
-        r = x.clone()
+        
 
         t = self.time_mlp(time)
-        return self.forward_blocks(x, t, r)
+        return self.forward_blocks(x, t)
 
 
