@@ -1,5 +1,6 @@
 # pip install --upgrade -q fastcore fastai diffusers datasets lpips pytorch-fid ema-pytorch wandb clean-fid
-#python experiment_script_WIP.py --dataset_name faces --batch_size 256 --img_size 64 --num_epochs 50 --comments "faces ema test" --job_type "Quick Run (no blur)" --calc_fid_every_n_steps 1000 --use_device cuda:0 --perceptual_loss_scale 0.1 --n_samples_for_FID 5000 --log_samples_every_n_steps 1000 --ema --ema_beta 0.998
+#python experiment_script_WIP.py --dataset_name faces --batch_size 256 --img_size 64 --num_epochs 5 --comments "5epch speedrun" --job_type "Quick Run" --calc_fid_every_n_steps 1000 --use_device cuda:0 --perceptual_loss_scale 0.05 --n_samples_for_FID 5000 --log_samples_every_n_steps 1000 --ema --ema_beta 0.998 --blur
+
 import wandb
 import torch
 import torchvision
@@ -40,28 +41,21 @@ class Crappify(Transform):
         x = torch.lerp(x, noise, noise_amount.view(-1, 1, 1, 1)) * 255
         return x
 
-# TODO take arguments for this besides sample_size
+# The UNET Model (wraps diffusers unet)
 class Unetwrapper(Module):
-    def __init__(self, in_channels=3, out_channels=3, sample_size=64):
+    def __init__(self, in_channels=3, out_channels=3, sample_size=64,
+                block_out_channels=(32, 64, 128, 128,),
+                down_block_types=("DownBlock2D","DownBlock2D","AttnDownBlock2D","AttnDownBlock2D",),
+                up_block_types=("AttnUpBlock2D","AttnUpBlock2D","UpBlock2D","UpBlock2D",)):
         super().__init__()
         self.net = UNet2DModel(
             sample_size=sample_size,  # the target image resolution
             in_channels=in_channels,  # the number of input channels, 3 for RGB images
             out_channels=out_channels,  # the number of output channels
             layers_per_block=2,  # how many ResNet layers to use per UNet block
-            block_out_channels=(32, 64, 128, 128),  # <<< Experiment with number of layers and how many
-            down_block_types=( 
-                "DownBlock2D",  # a regular ResNet downsampling block
-                "DownBlock2D",  # a regular ResNet downsampling block
-                "AttnDownBlock2D",  # a regular ResNet downsampling block
-                "AttnDownBlock2D",  # a ResNet downsampling block with spatial self-attention (uses lots of memory at higher resolutions - better to keep at lowest level or two)
-            ), 
-            up_block_types=(
-                "AttnUpBlock2D",  # a ResNet upsampling block with spatial self-attention
-                "AttnUpBlock2D", 
-                "UpBlock2D",
-                "UpBlock2D",
-              ),
+            block_out_channels=block_out_channels,  # <<< Experiment with number of layers and how many
+            down_block_types=down_block_types, 
+            up_block_types=up_block_types,
         )
     def forward(self, x): return self.net(x, 0).sample # Timestep cond always set to 0
 
@@ -132,15 +126,10 @@ class FIDCallback(Callback):
             for i, im in enumerate(x):
                 im = im.detach().cpu().permute(1, 2, 0).clip(0, 1) * 255
                 im = Image_PIL.fromarray(np.array(im).astype(np.uint8))
-                im.save(f'generated_samples/{start+i:06}.jpeg')
-
-#         # Using a command-line version as a hack for now
-#         os.system('python -m pytorch_fid generated_samples/ valid_samples/ > log.txt')
-#         time.sleep(0.5) # Wait for the file operations to be propely finished - yuk!
-#         with open('log.txt', 'r') as logfile:
-#             fid = float(logfile.read().split('  ')[-1])
-        fid = fid.compute_fid('generated_samples/', 'valid_samples/')
-        wandb.log({'FID':fid})
+                im.save(f'generated_samples/{start+i:06}.jpeg', quality=90)
+                
+        fid_score = fid.compute_fid('generated_samples/', 'valid_samples/')
+        wandb.log({'FID':fid_score})
 
     def after_epoch(self):
         if self.fid_after_epoch:
@@ -189,15 +178,11 @@ class EMAFIDCallback(Callback):
             for i, im in enumerate(x):
                 im = im.detach().cpu().permute(1, 2, 0).clip(0, 1) * 255
                 im = Image_PIL.fromarray(np.array(im).astype(np.uint8))
-                im.save(f'generated_samples_ema/{start+i:06}.jpeg')
+                im.save(f'generated_samples_ema/{start+i:06}.jpeg', quality=90)
 
-#         # Using a command-line version as a hack for now
-#         os.system('python -m pytorch_fid generated_samples_ema/ valid_samples/ > log_ema.txt')
-#         time.sleep(0.5) # Wait for the file operations to be propely finished - yuk!
-#         with open('log_ema.txt', 'r') as logfile:
-#             fid = float(logfile.read().split('  ')[-1])
-        fid = fid.compute_fid('generated_samples_ema/', 'valid_samples/')
-        wandb.log({'FID_EMA':fid})
+        fid_score = fid.compute_fid('generated_samples_ema/', 'valid_samples/')
+        wandb.log({'FID_EMA':fid_score})
+
 
     def after_epoch(self):
         if self.fid_after_epoch:
@@ -233,6 +218,19 @@ def main(dataset_name = 'cifar10', # Dataset name: faces, flowers or cifar10
          ema=False, # Use EMA?
          ema_beta=0.999, # EMA factor
         ):
+    
+    # Not sure how to do lists as args, setting manually for now
+    
+    # Defaults for a lot of weekend runs:
+#     block_out_channels=[32, 64, 128, 128], # UNET block channels
+#     down_block_types=["DownBlock2D","DownBlock2D","AttnDownBlock2D","AttnDownBlock2D"], # UNET downblock types
+#     up_block_types=["AttnUpBlock2D","AttnUpBlock2D","UpBlock2D","UpBlock2D"], # UNET upblock types
+    # New test
+    block_out_channels=[128, 256, 512], # UNET block channels
+    down_block_types=["DownBlock2D","DownBlock2D","AttnDownBlock2D"], # UNET downblock types
+    up_block_types=["AttnUpBlock2D","UpBlock2D","UpBlock2D"], # UNET upblock types
+            
+            
     device = torch.device(use_device if torch.cuda.is_available() else "cpu")
     print(f'Using device: {device}') 
 
@@ -248,6 +246,11 @@ def main(dataset_name = 'cifar10', # Dataset name: faces, flowers or cifar10
         dataset = dataset['train'][n_samples_for_FID:]
     elif dataset_name == 'faces':
         dataset = load_dataset('huggan/CelebA-faces')
+        dataset = dataset.with_transform(transforms)
+        validation_set = dataset['train'][:n_samples_for_FID]
+        dataset = dataset['train'][n_samples_for_FID:] 
+    elif dataset_name == 'afhq2':
+        dataset = load_dataset('huggan/AFHQv2')
         dataset = dataset.with_transform(transforms)
         validation_set = dataset['train'][:n_samples_for_FID]
         dataset = dataset['train'][n_samples_for_FID:] 
@@ -273,15 +276,16 @@ def main(dataset_name = 'cifar10', # Dataset name: faces, flowers or cifar10
     dls.show_batch()
 
     # Model
-    model = Unetwrapper(sample_size=img_size).to(device)
+    model = Unetwrapper(sample_size=img_size, 
+                        block_out_channels=block_out_channels,
+                        down_block_types=down_block_types, 
+                        up_block_types=up_block_types).to(device)
 
     # Loss function
     loss_fn_perceptual = lpips.LPIPS(net=perceptual_loss_net).to(device)
     loss_fn_perceptual.net.to(device)
     loss_fn_mse = MSELossFlat()
     def combined_loss(preds, y):
-        # print(preds.device, y.device)
-        # print(loss_fn_mse(preds, y).device, loss_fn_perceptual(preds, y).mean().device)
         return  loss_fn_mse(preds, y) * mse_loss_scale + loss_fn_perceptual(preds, y).mean() * perceptual_loss_scale
 
     # Learner
@@ -309,7 +313,7 @@ def main(dataset_name = 'cifar10', # Dataset name: faces, flowers or cifar10
             self._wandb_step += 1
             self._wandb_epoch += 1/self.n_iter
             hypers = {f'{k}_{i}':v for i,h in enumerate(self.opt.hypers) for k,v in h.items()}
-            if self.train_iter%50 == 0:
+            if self.train_iter%50 == 0: # Only logging every 50th train iter
                 wandb.log({'epoch': self._wandb_epoch, 'train_loss': self.smooth_loss, 
                            'raw_loss': self.loss, 'train_samples_per_sec': len(self.xb[0]) / batch_time,
                            **hypers}, step=self._wandb_step)
