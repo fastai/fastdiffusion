@@ -5,8 +5,10 @@ from fastai.vision.all import *
 
 def save_tensors(dl, fname="train_data"):
     "Export dataloader as tensors to disk"
-    X = [x for x, _ in iter(dl)]
-    y = [y for _, y in iter(dl)]
+    X, y = [],[]
+    for x_,y_ in iter(dl):
+        X.append(x_)
+        y.append(y_)
     
     # stack them together
     X = torch.cat(X)
