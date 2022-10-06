@@ -21,7 +21,9 @@
 - [Denoising Diffusion Probabilistic Model in Flax](https://github.com/yiyixuxu/denoising-diffusion-flax) by YiYi Xu, includes P2 weighting, self-conditioning, and EMA
 - [A Traveler’s Guide to the Latent Space](https://sweet-hall-e72.notion.site/A-Traveler-s-Guide-to-the-Latent-Space-85efba7e5e6a40e5bd3cae980f30235f)
 - [Denoising diffusion probabilistic models](https://github.com/acids-ircam/diffusion_models) - math+code tutorials in 4 notebooks
-- []()
+- Two articles from Sander Dieleman
+  - [Diffusion models are autoencoders](https://benanne.github.io/2022/01/31/diffusion.html#fnref:gyom4)
+  - [Guidance: a cheat code for diffusion models](https://benanne.github.io/2022/05/26/guidance.htm )
 - []()
 
 ### Additional papers
