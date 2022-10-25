@@ -140,7 +140,7 @@ class MLP(nn.Module):
 
 
 
-class MixerBlock(torch.Module):
+class MixerBlock(torch.nn.Module):
     patch_mixer: MLP
     hidden_mixer: MLP
     norm1: torch.nn.LayerNorm
@@ -166,7 +166,7 @@ class MixerBlock(torch.Module):
         return y
 
 
-class Mixer2d(torch.Module):
+class Mixer2d(torch.nn.Module):
     conv_in: torch.nn.Conv2d
     conv_out: torch.nn.ConvTranspose2d
     blocks: list
