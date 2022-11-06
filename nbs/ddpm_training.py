@@ -1,11 +1,13 @@
+from copy import deepcopy
+
 import torchvision
 import wandb
-from fastcore.script import call_parse
+from fastai.callback.wandb import *
 from fastai.vision.all import *
 from fastai.vision.gan import *
-from fastai.callback.wandb import *
+from fastcore.script import call_parse
 from unet import Unet
-from copy import deepcopy
+
 
 class DDPMCallback(Callback):
     def __init__(self, n_steps, beta_min, beta_max, tensor_type=TensorImage):
@@ -52,6 +54,81 @@ class DDPMCallback(Callback):
         if not hasattr(self, 'gather_preds'): self.before_batch_training()
         else: self.before_batch_sampling()
 
+
+
+
+class ModelEma(nn.Module):
+    def __init__(self, model, decay=0.9999, device=None):
+        super(ModelEma, self).__init__()
+        # make a copy of the model for accumulating moving average of weights
+        self.module = deepcopy(model)
+        self.module.eval()
+        self.decay = decay
+        self.device = device  # perform ema on different device from model if set
+        if self.device is not None:
+            self.module.to(device=device)
+
+    def _update(self, model, update_fn):
+        with torch.no_grad():
+            for ema_v, model_v in zip(self.module.state_dict().values(), model.state_dict().values()):
+                if self.device is not None:
+                    model_v = model_v.to(device=self.device)
+                ema_v.copy_(update_fn(ema_v, model_v))
+
+    def update(self, model):
+        self._update(model, update_fn=lambda e, m: self.decay * e + (1. - self.decay) * m)
+
+    def set(self, model):
+        self._update(model, update_fn=lambda e, m: m)
+
+class EMACallback(Callback):
+    order,run_valid = MixedPrecision.order+1,False
+    "Callback to implment Model Exponential Moving Average from PyTorch Image Models in fast.ai"
+    def __init__(self, decay=0.9999, ema_device=None):
+        store_attr()
+
+    @torch.no_grad()
+    def before_fit(self):
+        self.ema_model = ModelEma(self.learn.model, self.decay, self.ema_device)
+
+    def after_batch(self):
+        self.ema_model.update(self.learn.model)
+
+    def before_validate(self):
+        self.temp_model = self.learn.model
+        self.learn.model = self.ema_model.module
+
+    def after_validate(self):
+        self.learn.model = self.temp_model
+
+    @torch.no_grad()
+    def after_fit(self):
+        self.learn.model = self.ema_model.module
+        self.ema_model = None
+        self.remove_cb(EMACallback)
+
+
+def save_grid(preds, experiment_name, epoch, wandb_to_log=False):
+    grid = torchvision.utils.make_grid(preds, nrow=math.ceil(preds.shape[0] ** 0.5), padding=0)
+    file_name = f'{experiment_name}_{epoch+1}_samples.png'
+    Image.fromarray(grid.permute(1,2,0).numpy().astype(np.uint8)).save(file_name)
+    if wandb_to_log: 
+        return wandb.Image(file_name)
+
+@patch
+def log_predictions(self:WandbCallback):
+    try:
+        inp,preds,targs,out = self.learn.fetch_preds.preds
+        preds = self.dls.after_batch.decode((preds,))[0]
+        wandb_img = save_grid(preds, self.experiment_name, self.learn.epoch, wandb_to_log=True)
+        wandb.log({"samples": [wandb_img]}, step=self._wandb_step)
+    except: pass
+
+@patch
+def before_validate(self:WandbCallback):
+    if (self.epoch+1) % self.demo_every == 0: self.learn.add_cb(FetchPredsCallback(dl=self.valid_dl, with_input=True, with_decoded=True, reorder=self.reorder))
+    else: self.learn.remove_cb(FetchPredsCallback)
+
 @call_parse
 def main(
     experiment_name:str="ddpm_cifar10", # name of the experiment
@@ -60,8 +137,10 @@ def main(
     n_steps:int=1000, # number of steps in noise schedule
     beta_min:float=0.0001, # minimum noise level
     beta_max:float=0.02, # maximum noise level
-    lr:float=3e-4, # learning rate
+    lr:float=2e-4, # learning rate
     epochs:int=1000, # number of epochs for training
+    demo_every:int=10, # demo every n epochs
+    demo_end:bool=True, # demo at the end of training
     gpu:int=0, # gpu id
     wandb_project:str="fastai_ddpm", # wandb project name
     wandb_entity:str="tmabraham", # wandb entity name
@@ -79,24 +158,24 @@ def main(
                        get_items = get_image_files,
                        splitter = IndexSplitter(range(batch_size)),
                        item_tfms=Resize(image_size), 
-                       batch_tfms = Normalize.from_stats(torch.tensor([0.5]), torch.tensor([0.5])))
+                       batch_tfms = [Normalize.from_stats(torch.tensor([0.5]), torch.tensor([0.5])), Flip()])
     dls = dblock.dataloaders(path, path=path, bs=batch_size)
 
     # setup model
-    model = Unet(dim=32)
+    model = Unet(dim=32, dropout=0.1)
 
     # setup learner
-    ddpm_learner = Learner(dls, model, cbs=[DDPMCallback(n_steps=n_steps, beta_min=beta_min, beta_max=beta_max), WandbCallback(log_model=True, log_preds=False)], loss_func=nn.MSELoss())
+    ddpm_learner = Learner(dls, model, cbs=[DDPMCallback(n_steps=n_steps, beta_min=beta_min, beta_max=beta_max), EMACallback(), WandbCallback(log_model=True, log_preds_every_epoch=True)], loss_func=nn.MSELoss())
+    ddpm_learner.experiment_name = experiment_name
+    ddpm_learner.demo_every = demo_every
+
+    # start training 
     ddpm_learner.fit_one_cycle(epochs,lr)
     ddpm_learner.save(f'{experiment_name}_{epochs}')
 
-    # setup sampling
-    preds, targ = ddpm_learner.get_preds()
-    preds = dls.after_batch.decode((preds,))[0][:64]
-
-    grid = torchvision.utils.make_grid(preds, nrow=8)
-    Image.fromarray(grid.permute(1,2,0).numpy().astype(np.uint8)).save(f'{experiment_name}_{epochs}_samples.png')
-    wandb.log({"samples": [wandb.Image(f'{experiment_name}_{epochs}_samples.png')]})
-
-
-
+    # demo at the end of training
+    if demo_end:
+        preds, targ = ddpm_learner.get_preds()
+        preds = ddpm_learner.dls.after_batch.decode((preds,))[0]
+        wandb_img = save_grid(preds, experiment_name, ddpm_learner.epoch, wandb=True)
+        wandb.log({"samples": [wandb_img]})
