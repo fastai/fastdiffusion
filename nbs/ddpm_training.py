@@ -82,7 +82,7 @@ class ModelEma(nn.Module):
         self._update(model, update_fn=lambda e, m: m)
 
 class EMACallback(Callback):
-    order,run_valid = MixedPrecision.order+1,False
+    order,run_valid,remove_on_fetch = MixedPrecision.order+1,False,True
     "Callback to implment Model Exponential Moving Average from PyTorch Image Models in fast.ai"
     def __init__(self, decay=0.9999, ema_device=None):
         store_attr()
@@ -110,7 +110,7 @@ class EMACallback(Callback):
 
 def save_grid(preds, experiment_name, epoch, wandb_to_log=False):
     grid = torchvision.utils.make_grid(preds, nrow=math.ceil(preds.shape[0] ** 0.5), padding=0)
-    file_name = f'{experiment_name}_{epoch+1}_samples.png'
+    file_name = f'{experiment_name}_{epoch}_samples.png'
     Image.fromarray(grid.permute(1,2,0).numpy().astype(np.uint8)).save(file_name)
     if wandb_to_log: 
         return wandb.Image(file_name)
@@ -120,7 +120,7 @@ def log_predictions(self:WandbCallback):
     try:
         inp,preds,targs,out = self.learn.fetch_preds.preds
         preds = self.dls.after_batch.decode((preds,))[0]
-        wandb_img = save_grid(preds, self.experiment_name, self.learn.epoch, wandb_to_log=True)
+        wandb_img = save_grid(preds, self.experiment_name, self.learn.epoch+1, wandb_to_log=True)
         wandb.log({"samples": [wandb_img]}, step=self._wandb_step)
     except: pass
 
@@ -132,13 +132,18 @@ def before_validate(self:WandbCallback):
 @call_parse
 def main(
     experiment_name:str="ddpm_cifar10", # name of the experiment
+    dataset_name:str="CIFAR", # name of the dataset
     batch_size:int=2048, # batch size
     image_size:int=32, # image size
+    num_channels:int=3, # number of channels
     n_steps:int=1000, # number of steps in noise schedule
     beta_min:float=0.0001, # minimum noise level
     beta_max:float=0.02, # maximum noise level
     lr:float=2e-4, # learning rate
     epochs:int=1000, # number of epochs for training
+    dropout:float=0., # dropout rate
+    dim_mults:Param("List of channel multipliers", int, nargs='+')=[1,2,4,8], # channel multipliers
+    ema_decay:float=0.9999, # decay rate for EMA
     demo_every:int=10, # demo every n epochs
     demo_end:bool=True, # demo at the end of training
     gpu:int=0, # gpu id
@@ -152,9 +157,15 @@ def main(
     torch.cuda.set_device(gpu)
 
     # setup data
-    path = untar_data(URLs.CIFAR)
-    dblock = DataBlock(blocks = (TransformBlock, ImageBlock),
-                       get_x = partial(generate_noise, size=(3,image_size,image_size)),
+    if dataset_name == "CIFAR":
+        path = untar_data(URLs.CIFAR)
+    if dataset_name == "FashionMNIST": # if the dataset is on URLs, could be as simple as getattr(URLs, dataset_name)
+        path  = untar_data('https://github.com/DeepLenin/fashion-mnist_png/raw/master/data.zip')
+
+    if num_channels == 1: image_block = ImageBlock(cls=PILImageBW)
+    else: image_block = ImageBlock(cls=PILImage)
+    dblock = DataBlock(blocks = (TransformBlock, image_block),
+                       get_x = partial(generate_noise, size=(num_channels,image_size,image_size)),
                        get_items = get_image_files,
                        splitter = IndexSplitter(range(batch_size)),
                        item_tfms=Resize(image_size), 
@@ -162,20 +173,23 @@ def main(
     dls = dblock.dataloaders(path, path=path, bs=batch_size)
 
     # setup model
-    model = Unet(dim=32, dropout=0.1)
+    model = Unet(dim=image_size, dropout=dropout, dim_mults = tuple(dim_mults), channels=num_channels)
 
     # setup learner
-    ddpm_learner = Learner(dls, model, cbs=[DDPMCallback(n_steps=n_steps, beta_min=beta_min, beta_max=beta_max), EMACallback(), WandbCallback(log_model=True, log_preds_every_epoch=True)], loss_func=nn.MSELoss())
+    cbs=[DDPMCallback(n_steps=n_steps, beta_min=beta_min, beta_max=beta_max),ReduceLROnPlateau(patience=10,factor=2),WandbCallback(log_model=True, log_preds_every_epoch=True)]
+    if ema_decay!=0:
+        cbs.append(EMACallback(decay=ema_decay))
+    ddpm_learner = Learner(dls, model, cbs=cbs, loss_func=nn.MSELoss())
     ddpm_learner.experiment_name = experiment_name
     ddpm_learner.demo_every = demo_every
 
     # start training 
-    ddpm_learner.fit_one_cycle(epochs,lr)
+    ddpm_learner.fit(epochs,lr)
     ddpm_learner.save(f'{experiment_name}_{epochs}')
 
     # demo at the end of training
     if demo_end:
         preds, targ = ddpm_learner.get_preds()
         preds = ddpm_learner.dls.after_batch.decode((preds,))[0]
-        wandb_img = save_grid(preds, experiment_name, ddpm_learner.epoch, wandb=True)
+        wandb_img = save_grid(preds, experiment_name, 'end', wandb_to_log=True)
         wandb.log({"samples": [wandb_img]})
