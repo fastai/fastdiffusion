@@ -56,6 +56,7 @@ class DDPMCallback(Callback):
 @call_parse
 def main(
     experiment_name:str="ddpm_cifar10", # name of the experiment
+    epochs:int=1000, # epochs
     batch_size:int=2048, # batch size
     image_size:int=32, # image size
     n_steps:int=1000, # number of steps in noise schedule
@@ -83,12 +84,12 @@ def main(
 
     # setup learner
     ddpm_learner = Learner(dls, model, cbs=[DDPMCallback(n_steps=n_steps, beta_min=beta_min, beta_max=beta_max)], loss_func=nn.MSELoss())
-    #ddpm_learner.load(f'{experiment_name}_{epochs}')
-    ddpm_learner.load('model')
+    ddpm_learner.load(f'{experiment_name}_{epochs}')
+    #ddpm_learner.load('model')
 
     # setup sampling
     preds, targ = ddpm_learner.get_preds()
     preds = dls.after_batch.decode((preds,))[0][:64]
 
     grid = torchvision.utils.make_grid(preds, nrow=8)
-    Image.fromarray(grid.permute(1,2,0).numpy().astype(np.uint8)).save(f'{experiment_name}_best_samples.png')
+    Image.fromarray(grid.permute(1,2,0).numpy().astype(np.uint8)).save(f'{experiment_name}_{epochs}_gen_samples.png')
